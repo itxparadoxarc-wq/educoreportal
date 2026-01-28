@@ -97,10 +97,9 @@ export default function Auth() {
       }
 
       if (data?.user) {
-        // Assign master_admin role
+        // Use secure function to assign master_admin role (bypasses RLS for first user only)
         const { error: roleError } = await supabase
-          .from("user_roles")
-          .insert({ user_id: data.user.id, role: "master_admin" });
+          .rpc("setup_first_admin", { admin_user_id: data.user.id });
 
         if (roleError) {
           setError("Account created but failed to assign admin role: " + roleError.message);
