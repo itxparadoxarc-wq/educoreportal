@@ -13,7 +13,7 @@ interface AuthContextType {
   isMasterAdmin: boolean;
   isStaff: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ data: { user: User | null } | null; error: Error | null }>;
   signOut: () => Promise<void>;
   lastActivity: Date;
   updateActivity: () => void;
@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        return { error };
+        return { data: null, error };
       }
 
       // Create profile for the new user
@@ -187,9 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // New users don't get a role automatically for security
       }
 
-      return { error: null };
+      return { data: { user: data.user }, error: null };
     } catch (err) {
-      return { error: err as Error };
+      return { data: null, error: err as Error };
     }
   };
 
