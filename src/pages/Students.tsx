@@ -8,13 +8,15 @@ import {
   Eye,
   Edit,
   Phone,
-  Mail,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -24,114 +26,79 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useStudents, useDeleteStudent, Student } from "@/hooks/useStudents";
+import { StudentFormDialog } from "@/components/students/StudentFormDialog";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface Student {
-  id: string;
-  studentId: string;
-  name: string;
-  class: string;
-  section: string;
-  guardianName: string;
-  guardianPhone: string;
-  status: "active" | "inactive" | "alumni";
-  feeStatus: "paid" | "pending" | "overdue";
-  admissionDate: string;
-}
-
-const mockStudents: Student[] = [
-  {
-    id: "1",
-    studentId: "INST-2026-0001",
-    name: "Ahmed Hassan",
-    class: "10",
-    section: "A",
-    guardianName: "Muhammad Hassan",
-    guardianPhone: "+92 300 1234567",
-    status: "active",
-    feeStatus: "paid",
-    admissionDate: "2024-04-15",
-  },
-  {
-    id: "2",
-    studentId: "INST-2026-0002",
-    name: "Sara Ahmed",
-    class: "9",
-    section: "B",
-    guardianName: "Tahir Ahmed",
-    guardianPhone: "+92 321 9876543",
-    status: "active",
-    feeStatus: "pending",
-    admissionDate: "2024-04-18",
-  },
-  {
-    id: "3",
-    studentId: "INST-2026-0003",
-    name: "Ali Raza",
-    class: "8",
-    section: "A",
-    guardianName: "Raza Khan",
-    guardianPhone: "+92 333 5556667",
-    status: "active",
-    feeStatus: "overdue",
-    admissionDate: "2024-05-01",
-  },
-  {
-    id: "4",
-    studentId: "INST-2026-0004",
-    name: "Fatima Khan",
-    class: "10",
-    section: "B",
-    guardianName: "Imran Khan",
-    guardianPhone: "+92 345 1112223",
-    status: "active",
-    feeStatus: "paid",
-    admissionDate: "2024-05-10",
-  },
-  {
-    id: "5",
-    studentId: "INST-2026-0005",
-    name: "Usman Ali",
-    class: "7",
-    section: "C",
-    guardianName: "Ali Ahmed",
-    guardianPhone: "+92 312 4445556",
-    status: "inactive",
-    feeStatus: "pending",
-    admissionDate: "2024-03-20",
-  },
-];
-
-const statusColors = {
+const statusColors: Record<string, string> = {
   active: "status-badge bg-success/20 text-success",
   inactive: "status-badge bg-muted text-muted-foreground",
   alumni: "status-badge bg-primary/20 text-primary",
-};
-
-const feeStatusColors = {
-  paid: "status-badge status-paid",
-  pending: "status-badge status-pending",
-  overdue: "status-badge status-overdue",
+  left: "status-badge bg-destructive/20 text-destructive",
 };
 
 export default function Students() {
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
 
-  const filteredStudents = mockStudents.filter((student) => {
-    const matchesSearch =
-      student.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.guardianPhone.includes(searchQuery);
-
-    const matchesClass =
-      classFilter === "all" || student.class === classFilter;
-
-    const matchesStatus =
-      statusFilter === "all" || student.status === statusFilter;
-
-    return matchesSearch && matchesClass && matchesStatus;
+  const { isMasterAdmin } = useAuth();
+  const { data: students, isLoading, error } = useStudents({
+    class: classFilter,
+    status: statusFilter,
+    search: searchQuery,
   });
+  const deleteStudent = useDeleteStudent();
+
+  const handleEdit = (student: Student) => {
+    setEditingStudent(student);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (deletingStudent) {
+      await deleteStudent.mutateAsync(deletingStudent.id);
+      setDeletingStudent(null);
+    }
+  };
+
+  const handleExport = () => {
+    if (!students) return;
+    const csv = [
+      ["Student ID", "Name", "Class", "Section", "Guardian", "Phone", "Status"],
+      ...students.map((s) => [
+        s.student_id,
+        `${s.first_name} ${s.last_name}`,
+        s.class,
+        s.section || "",
+        s.guardian_name,
+        s.guardian_phone,
+        s.status,
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `students-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
 
   return (
     <div className="space-y-6">
@@ -143,7 +110,10 @@ export default function Students() {
             Manage student records, profiles, and documents
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => {
+          setEditingStudent(null);
+          setIsFormOpen(true);
+        }}>
           <Plus className="h-4 w-4" />
           Add Student
         </Button>
@@ -172,10 +142,11 @@ export default function Students() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
-                <SelectItem value="7">Class 7</SelectItem>
-                <SelectItem value="8">Class 8</SelectItem>
-                <SelectItem value="9">Class 9</SelectItem>
-                <SelectItem value="10">Class 10</SelectItem>
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
+                  <SelectItem key={c} value={c}>
+                    Class {c}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -188,15 +159,11 @@ export default function Students() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="alumni">Alumni</SelectItem>
+                <SelectItem value="left">Left</SelectItem>
               </SelectContent>
             </Select>
 
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" />
-              More Filters
-            </Button>
-
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleExport}>
               <Download className="h-4 w-4" />
               Export
             </Button>
@@ -207,115 +174,172 @@ export default function Students() {
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing <span className="font-medium text-foreground">{filteredStudents.length}</span> of{" "}
-          <span className="font-medium text-foreground">{mockStudents.length}</span> students
+          Showing <span className="font-medium text-foreground">{students?.length || 0}</span> students
         </p>
       </div>
 
-      {/* Students Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Class</th>
-                <th>Guardian</th>
-                <th>Status</th>
-                <th>Fee Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.map((student) => (
-                <tr key={student.id} className="cursor-pointer">
-                  <td>
-                    <span className="font-mono text-sm text-primary">
-                      {student.studentId}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="text-sm font-medium text-primary">
-                          {student.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </span>
-                      </div>
-                      <span className="font-medium">{student.name}</span>
-                    </div>
-                  </td>
-                  <td>
-                    {student.class}-{student.section}
-                  </td>
-                  <td>
-                    <div className="space-y-1">
-                      <p className="text-sm">{student.guardianName}</p>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Phone className="h-3 w-3" />
-                        {student.guardianPhone}
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={statusColors[student.status]}>
-                      {student.status}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={feeStatusColors[student.feeStatus]}>
-                      {student.feeStatus}
-                    </span>
-                  </td>
-                  <td>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2">
-                          <Eye className="h-4 w-4" />
-                          View Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2">
-                          <Edit className="h-4 w-4" />
-                          Edit Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2">
-                          <Phone className="h-4 w-4" />
-                          Call Guardian
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2">
-                          <Mail className="h-4 w-4" />
-                          Send Notice
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Loading State */}
+      {isLoading && (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-2 text-muted-foreground">Loading students...</p>
         </div>
+      )}
 
-        {/* Pagination */}
-        <div className="p-4 border-t border-border flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Page 1 of 1</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled>
-              Next
-            </Button>
+      {/* Error State */}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-6 text-center">
+          <p className="text-destructive">Error loading students: {error.message}</p>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !error && students?.length === 0 && (
+        <div className="bg-card border border-border rounded-xl p-12 text-center">
+          <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Plus className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">No Students Found</h3>
+          <p className="text-muted-foreground mb-4">
+            {searchQuery || classFilter !== "all" || statusFilter !== "all"
+              ? "No students match your search criteria."
+              : "Get started by adding your first student."}
+          </p>
+          <Button onClick={() => setIsFormOpen(true)}>Add Student</Button>
+        </div>
+      )}
+
+      {/* Students Table */}
+      {!isLoading && !error && students && students.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Student ID</th>
+                  <th>Name</th>
+                  <th>Class</th>
+                  <th>Guardian</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.id} className="cursor-pointer">
+                    <td>
+                      <span className="font-mono text-sm text-primary">
+                        {student.student_id}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="text-sm font-medium text-primary">
+                            {student.first_name[0]}
+                            {student.last_name[0]}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">
+                            {student.first_name} {student.last_name}
+                          </span>
+                          {student.gender && (
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {student.gender}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {student.class}
+                      {student.section && `-${student.section}`}
+                    </td>
+                    <td>
+                      <div className="space-y-1">
+                        <p className="text-sm">{student.guardian_name}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          {student.guardian_phone}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={statusColors[student.status] || statusColors.active}>
+                        {student.status}
+                      </span>
+                    </td>
+                    <td>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="gap-2" onClick={() => handleEdit(student)}>
+                            <Edit className="h-4 w-4" />
+                            Edit Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onClick={() => window.open(`tel:${student.guardian_phone}`)}
+                          >
+                            <Phone className="h-4 w-4" />
+                            Call Guardian
+                          </DropdownMenuItem>
+                          {isMasterAdmin && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="gap-2 text-destructive"
+                                onClick={() => setDeletingStudent(student)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Student Form Dialog */}
+      <StudentFormDialog
+        open={isFormOpen}
+        onOpenChange={setIsFormOpen}
+        student={editingStudent}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingStudent} onOpenChange={() => setDeletingStudent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Student</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {deletingStudent?.first_name}{" "}
+              {deletingStudent?.last_name}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { Download, FileText, TrendingUp, Users, CreditCard } from "lucide-react";
+import { Download, FileText, TrendingUp, Users, CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -21,40 +21,112 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDashboardStats } from "@/hooks/useDashboardData";
+import { useFees } from "@/hooks/useFees";
+import { useStudents } from "@/hooks/useStudents";
 
-const feeCollectionData = [
-  { month: "Sep", collected: 2100000, pending: 450000 },
-  { month: "Oct", collected: 2300000, pending: 380000 },
-  { month: "Nov", collected: 2150000, pending: 520000 },
-  { month: "Dec", collected: 1900000, pending: 680000 },
-  { month: "Jan", collected: 2400000, pending: 485000 },
-];
-
-const studentDistribution = [
-  { name: "Class 7", value: 280, color: "#0ea5e9" },
-  { name: "Class 8", value: 310, color: "#22c55e" },
-  { name: "Class 9", value: 345, color: "#f59e0b" },
-  { name: "Class 10", value: 312, color: "#8b5cf6" },
-];
-
-const attendanceData = [
-  { week: "W1", attendance: 94 },
-  { week: "W2", attendance: 92 },
-  { week: "W3", attendance: 96 },
-  { week: "W4", attendance: 89 },
-];
-
-const gradeDistribution = [
-  { grade: "A+", count: 45 },
-  { grade: "A", count: 125 },
-  { grade: "B+", count: 210 },
-  { grade: "B", count: 280 },
-  { grade: "C", count: 185 },
-  { grade: "D", count: 95 },
-  { grade: "F", count: 25 },
-];
+const COLORS = ["#0ea5e9", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#ec4899"];
 
 export default function Reports() {
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: fees } = useFees({});
+  const { data: students } = useStudents({});
+
+  // Calculate student distribution by class
+  const studentDistribution = students?.reduce((acc, student) => {
+    const key = `Class ${student.class}`;
+    const existing = acc.find((item) => item.name === key);
+    if (existing) {
+      existing.value++;
+    } else {
+      acc.push({ name: key, value: 1, color: COLORS[acc.length % COLORS.length] });
+    }
+    return acc;
+  }, [] as { name: string; value: number; color: string }[]) || [];
+
+  // Calculate fee collection by month
+  const feeCollectionData = fees?.reduce((acc, fee) => {
+    const month = new Date(fee.due_date).toLocaleString("default", { month: "short" });
+    const existing = acc.find((item) => item.month === month);
+    if (existing) {
+      if (fee.status === "paid") {
+        existing.collected += Number(fee.paid_amount || 0);
+      } else {
+        existing.pending += Number(fee.amount) - Number(fee.paid_amount || 0);
+      }
+    } else {
+      acc.push({
+        month,
+        collected: fee.status === "paid" ? Number(fee.paid_amount || 0) : 0,
+        pending: fee.status !== "paid" ? Number(fee.amount) - Number(fee.paid_amount || 0) : 0,
+      });
+    }
+    return acc;
+  }, [] as { month: string; collected: number; pending: number }[]) || [];
+
+  // Calculate collection rate
+  const totalFees = fees?.reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+  const totalCollected = fees?.reduce((sum, f) => sum + Number(f.paid_amount || 0), 0) || 0;
+  const collectionRate = totalFees > 0 ? ((totalCollected / totalFees) * 100).toFixed(1) : "0";
+
+  const handleExportStudents = () => {
+    if (!students) return;
+    const csv = [
+      ["Student ID", "Name", "Class", "Section", "Guardian", "Phone", "Status"],
+      ...students.map((s) => [
+        s.student_id,
+        `${s.first_name} ${s.last_name}`,
+        s.class,
+        s.section || "",
+        s.guardian_name,
+        s.guardian_phone,
+        s.status,
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `students-report-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
+
+  const handleExportFees = () => {
+    if (!fees) return;
+    const csv = [
+      ["Receipt #", "Student", "Description", "Amount", "Paid", "Due Date", "Status"],
+      ...fees.map((f) => [
+        f.receipt_number || "-",
+        `${f.students?.first_name} ${f.students?.last_name}`,
+        f.description,
+        f.amount,
+        f.paid_amount || 0,
+        f.due_date,
+        f.status,
+      ]),
+    ]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fees-report-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
+
+  if (statsLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -66,19 +138,13 @@ export default function Reports() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Select defaultValue="jan-2026">
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="jan-2026">January 2026</SelectItem>
-              <SelectItem value="dec-2025">December 2025</SelectItem>
-              <SelectItem value="nov-2025">November 2025</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleExportStudents}>
             <Download className="h-4 w-4" />
-            Export Report
+            Export Students
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={handleExportFees}>
+            <Download className="h-4 w-4" />
+            Export Fees
           </Button>
         </div>
       </div>
@@ -92,8 +158,8 @@ export default function Reports() {
             </div>
             <span className="text-sm text-muted-foreground">Total Students</span>
           </div>
-          <p className="text-3xl font-bold">1,247</p>
-          <p className="text-sm text-success mt-1">+12 this month</p>
+          <p className="text-3xl font-bold">{stats?.totalStudents || 0}</p>
+          <p className="text-sm text-success mt-1">+{stats?.newEnrollmentsThisYear || 0} this year</p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-5">
@@ -103,8 +169,10 @@ export default function Reports() {
             </div>
             <span className="text-sm text-muted-foreground">Collection Rate</span>
           </div>
-          <p className="text-3xl font-bold">83.2%</p>
-          <p className="text-sm text-success mt-1">+5.4% vs last month</p>
+          <p className="text-3xl font-bold">{collectionRate}%</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            PKR {totalCollected.toLocaleString()} collected
+          </p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-5">
@@ -112,21 +180,25 @@ export default function Reports() {
             <div className="h-10 w-10 rounded-lg bg-warning/20 flex items-center justify-center">
               <TrendingUp className="h-5 w-5 text-warning" />
             </div>
-            <span className="text-sm text-muted-foreground">Avg. Attendance</span>
+            <span className="text-sm text-muted-foreground">Active Students</span>
           </div>
-          <p className="text-3xl font-bold">92.8%</p>
-          <p className="text-sm text-muted-foreground mt-1">This month</p>
+          <p className="text-3xl font-bold">{stats?.activeStudents || 0}</p>
+          <p className="text-sm text-muted-foreground mt-1">Currently enrolled</p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-5">
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-lg bg-info/20 flex items-center justify-center">
-              <FileText className="h-5 w-5 text-info" />
+            <div className="h-10 w-10 rounded-lg bg-destructive/20 flex items-center justify-center">
+              <FileText className="h-5 w-5 text-destructive" />
             </div>
-            <span className="text-sm text-muted-foreground">Avg. Grade</span>
+            <span className="text-sm text-muted-foreground">Pending Dues</span>
           </div>
-          <p className="text-3xl font-bold">B+</p>
-          <p className="text-sm text-success mt-1">78.5% average</p>
+          <p className="text-3xl font-bold">
+            PKR {((stats?.totalFeesPending || 0) / 1000).toFixed(0)}K
+          </p>
+          <p className="text-sm text-destructive mt-1">
+            {stats?.pendingStudentCount || 0} students
+          </p>
         </div>
       </div>
 
@@ -134,148 +206,103 @@ export default function Reports() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Fee Collection Chart */}
         <div className="bg-card border border-border rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Fee Collection Trend</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={feeCollectionData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  tickFormatter={(value) => `${value / 1000000}M`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: number) =>
-                    `₨${(value / 1000).toFixed(0)}K`
-                  }
-                />
-                <Bar dataKey="collected" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="pending" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-center gap-6 mt-4">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded bg-success" />
-              <span className="text-sm text-muted-foreground">Collected</span>
+          <h3 className="text-lg font-semibold mb-4">Fee Collection by Month</h3>
+          {feeCollectionData.length > 0 ? (
+            <>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={feeCollectionData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      tickFormatter={(value) =>
+                        value >= 1000000
+                          ? `${(value / 1000000).toFixed(1)}M`
+                          : `${(value / 1000).toFixed(0)}K`
+                      }
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value: number) => `PKR ${value.toLocaleString()}`}
+                    />
+                    <Bar dataKey="collected" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} name="Collected" />
+                    <Bar dataKey="pending" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} name="Pending" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-6 mt-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded bg-success" />
+                  <span className="text-sm text-muted-foreground">Collected</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded bg-warning" />
+                  <span className="text-sm text-muted-foreground">Pending</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No fee data available
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded bg-warning" />
-              <span className="text-sm text-muted-foreground">Pending</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Student Distribution */}
         <div className="bg-card border border-border rounded-xl p-6">
           <h3 className="text-lg font-semibold mb-4">Student Distribution by Class</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={studentDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {studentDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-center flex-wrap gap-4 mt-4">
-            {studentDistribution.map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div
-                  className="h-3 w-3 rounded"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {item.name}: {item.value}
-                </span>
+          {studentDistribution.length > 0 ? (
+            <>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={studentDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {studentDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Attendance Trend */}
-        <div className="bg-card border border-border rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Weekly Attendance Rate</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={attendanceData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" stroke="hsl(var(--muted-foreground))" />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  domain={[80, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value: number) => `${value}%`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="attendance"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={3}
-                  dot={{ fill: "hsl(var(--primary))", strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Grade Distribution */}
-        <div className="bg-card border border-border rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Grade Distribution (Mid-Terms)</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={gradeDistribution} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                <YAxis
-                  type="category"
-                  dataKey="grade"
-                  stroke="hsl(var(--muted-foreground))"
-                  width={40}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+              <div className="flex justify-center flex-wrap gap-4 mt-4">
+                {studentDistribution.map((item) => (
+                  <div key={item.name} className="flex items-center gap-2">
+                    <div
+                      className="h-3 w-3 rounded"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {item.name}: {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-72 flex items-center justify-center text-muted-foreground">
+              No student data available
+            </div>
+          )}
         </div>
       </div>
 
@@ -283,19 +310,19 @@ export default function Reports() {
       <div className="bg-card border border-border rounded-xl p-6">
         <h3 className="text-lg font-semibold mb-4">Generate Custom Reports</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2">
+          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2" onClick={handleExportStudents}>
             <FileText className="h-6 w-6" />
             <span>Student Data (CSV)</span>
           </Button>
-          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2">
+          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2" onClick={handleExportFees}>
             <CreditCard className="h-6 w-6" />
             <span>Fee Collection Report</span>
           </Button>
-          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2">
+          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2" disabled>
             <TrendingUp className="h-6 w-6" />
             <span>Academic Analysis</span>
           </Button>
-          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2">
+          <Button variant="outline" className="h-auto py-4 flex flex-col gap-2" disabled>
             <Users className="h-6 w-6" />
             <span>Attendance Summary</span>
           </Button>
