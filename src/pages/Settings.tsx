@@ -1,20 +1,21 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Bell, Shield, Database, Palette, Save, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Bell, Shield, Database, Palette, Save, Loader2, Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "next-themes";
 
 export default function Settings() {
   const { isMasterAdmin } = useAuth();
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
   
   const [settings, setSettings] = useState({
     emailNotifications: true,
     smsNotifications: false,
     autoBackup: true,
-    darkMode: true,
     sessionTimeout: 30,
   });
 
@@ -153,13 +154,22 @@ export default function Settings() {
           
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Dark Mode</p>
-                <p className="text-sm text-muted-foreground">Use dark color scheme</p>
+              <div className="flex items-center gap-2">
+                {theme === "dark" ? (
+                  <Moon className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Sun className="h-4 w-4 text-warning" />
+                )}
+                <div>
+                  <p className="font-medium">Dark Mode</p>
+                  <p className="text-sm text-muted-foreground">
+                    {theme === "dark" ? "Using dark color scheme" : "Using light color scheme"}
+                  </p>
+                </div>
               </div>
               <Switch 
-                checked={settings.darkMode}
-                onCheckedChange={(checked) => setSettings(s => ({ ...s, darkMode: checked }))}
+                checked={theme === "dark"}
+                onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
               />
             </div>
           </div>
