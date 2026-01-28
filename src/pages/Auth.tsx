@@ -16,7 +16,9 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState<boolean | null>(null);
   const [setupComplete, setSetupComplete] = useState(false);
   
@@ -77,9 +79,49 @@ export default function Auth() {
     }
   };
 
+  const getEmailNotConfirmed = (message: string) => {
+    const m = message.toLowerCase();
+    return m.includes("email not confirmed") || m.includes("not confirmed") || m.includes("email_not_confirmed");
+  };
+
+  const handleResendVerification = async () => {
+    setError("");
+    setInfo("");
+
+    try {
+      const parsedEmail = emailSchema.parse(email);
+      setIsResending(true);
+
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: parsedEmail,
+        options: {
+          // Use the current domain so the verification link never points to an old domain.
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+
+      if (resendError) {
+        setError(resendError.message);
+        return;
+      }
+
+      setInfo("Verification email sent. Please check your inbox (and spam). You can then sign in.");
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setError(e.errors[0].message);
+      } else {
+        setError("Failed to resend verification email. Please try again.");
+      }
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const handleFirstTimeSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setInfo("");
 
     if (!validateInputs()) {
       return;
@@ -121,6 +163,7 @@ export default function Auth() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setInfo("");
 
     if (!validateInputs()) {
       return;
@@ -131,6 +174,10 @@ export default function Auth() {
     try {
       const { error } = await signIn(email.trim(), password);
       if (error) {
+        if (getEmailNotConfirmed(error.message)) {
+          setError("Your email is not verified yet. Please verify your email, or resend the verification email below.");
+          return;
+        }
         if (error.message.includes("Invalid login credentials")) {
           setError("Invalid email or password. Please try again.");
         } else {
@@ -151,6 +198,8 @@ export default function Auth() {
       </div>
     );
   }
+
+  const showResendVerification = getEmailNotConfirmed(error);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -337,10 +386,33 @@ export default function Auth() {
               </div>
 
               <form onSubmit={handleLogin} className="space-y-5">
+                {info && (
+                  <div className="bg-success/10 border border-success/30 text-success text-sm rounded-lg p-3 flex items-start gap-2">
+                    <Shield className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <span>{info}</span>
+                  </div>
+                )}
                 {error && (
                   <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-lg p-3 flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                     <span>{error}</span>
+                  </div>
+                )}
+
+                {showResendVerification && (
+                  <div className="rounded-lg border border-border bg-muted/30 p-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={handleResendVerification}
+                      disabled={isResending}
+                    >
+                      {isResending ? "Sending verification email..." : "Resend verification email"}
+                    </Button>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Tip: open the newest email. Older verification links may point to an old domain.
+                    </p>
                   </div>
                 )}
 
