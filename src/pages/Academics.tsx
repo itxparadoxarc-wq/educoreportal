@@ -21,6 +21,7 @@ import {
 import { useExams, useExamMarks } from "@/hooks/useAcademics";
 import { CreateExamDialog } from "@/components/academics/CreateExamDialog";
 import { EnterMarksDialog } from "@/components/academics/EnterMarksDialog";
+import { useClasses } from "@/hooks/useClasses";
 
 const getGradeColor = (grade: string) => {
   if (grade.startsWith("A")) return "text-success";
@@ -36,6 +37,7 @@ export default function Academics() {
   const [isCreateExamOpen, setIsCreateExamOpen] = useState(false);
   const [isEnterMarksOpen, setIsEnterMarksOpen] = useState(false);
 
+  const { data: classes } = useClasses();
   const { data: exams, isLoading: examsLoading } = useExams({
     class: classFilter,
   });
@@ -170,14 +172,14 @@ export default function Academics() {
             </Select>
 
             <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="Class" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
-                  <SelectItem key={c} value={c}>
-                    Class {c}
+                {classes?.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>

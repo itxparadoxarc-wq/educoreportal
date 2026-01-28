@@ -9,6 +9,8 @@ import {
   ShieldCheck,
   UserCog,
   Download,
+  Bell,
+  Layers,
 } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import {
@@ -24,6 +26,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
 
 const mainNavItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -36,14 +39,20 @@ const mainNavItems = [
 
 const adminNavItems = [
   { title: "Staff Management", url: "/staff", icon: UserCog },
+  { title: "Class Management", url: "/classes", icon: Layers },
   { title: "Audit Logs", url: "/audit", icon: ShieldCheck },
   { title: "Data Export", url: "/export", icon: Download },
+];
+
+const utilityNavItems = [
+  { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
+  const { isMasterAdmin } = useAuth();
   const isCollapsed = state === "collapsed";
 
   const isActive = (path: string) => {
@@ -95,13 +104,42 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {isMasterAdmin && (
+          <SidebarGroup className="mt-6">
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2 mb-2">
+              {!isCollapsed && "Administration"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <RouterNavLink
+                        to={item.url}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                          isActive(item.url)
+                            ? "bg-primary text-primary-foreground shadow-glow"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        }`}
+                      >
+                        <item.icon className="h-5 w-5 flex-shrink-0" />
+                        {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                      </RouterNavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         <SidebarGroup className="mt-6">
           <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2 mb-2">
-            {!isCollapsed && "Administration"}
+            {!isCollapsed && "System"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {adminNavItems.map((item) => (
+              {utilityNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <RouterNavLink

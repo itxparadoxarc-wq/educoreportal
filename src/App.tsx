@@ -14,6 +14,10 @@ import Academics from "./pages/Academics";
 import Reports from "./pages/Reports";
 import StaffManagement from "./pages/StaffManagement";
 import AuditLogs from "./pages/AuditLogs";
+import Settings from "./pages/Settings";
+import Notifications from "./pages/Notifications";
+import DataExport from "./pages/DataExport";
+import ClassManagement from "./pages/ClassManagement";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -88,6 +92,26 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Settings />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Notifications />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
             {/* Master Admin Only Routes */}
             <Route
               path="/staff"
@@ -105,6 +129,26 @@ const App = () => (
                 <ProtectedRoute requireMasterAdmin>
                   <DashboardLayout>
                     <AuditLogs />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/export"
+              element={
+                <ProtectedRoute requireMasterAdmin>
+                  <DashboardLayout>
+                    <DataExport />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/classes"
+              element={
+                <ProtectedRoute requireMasterAdmin>
+                  <DashboardLayout>
+                    <ClassManagement />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

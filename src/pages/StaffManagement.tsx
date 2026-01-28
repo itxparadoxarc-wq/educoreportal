@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CreateStaffDialog } from "@/components/staff/CreateStaffDialog";
 
 interface Profile {
   id: string;
@@ -48,6 +49,7 @@ export default function StaffManagement() {
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   const fetchStaff = async () => {
     setIsLoading(true);
@@ -189,9 +191,15 @@ export default function StaffManagement() {
             Manage user roles and access permissions
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Shield className="h-4 w-4 text-primary" />
-          <span>Master Admin Only</span>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Create Staff Account
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Shield className="h-4 w-4 text-primary" />
+            <span>Master Admin Only</span>
+          </div>
         </div>
       </div>
 
@@ -354,6 +362,13 @@ export default function StaffManagement() {
           </div>
         )}
       </div>
+
+      {/* Create Staff Dialog */}
+      <CreateStaffDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onSuccess={fetchStaff}
+      />
     </div>
   );
 }

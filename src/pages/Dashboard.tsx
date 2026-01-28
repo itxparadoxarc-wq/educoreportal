@@ -1,14 +1,24 @@
-import { Users, CreditCard, TrendingUp, AlertTriangle, UserCheck, UserX, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Users, CreditCard, TrendingUp, AlertTriangle, UserCheck, UserX, Loader2, Search } from "lucide-react";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { DefaultersList } from "@/components/dashboard/DefaultersList";
 import { useDashboardStats } from "@/hooks/useDashboardData";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useStudents } from "@/hooks/useStudents";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { data: stats, isLoading, error } = useDashboardStats();
   const { isMasterAdmin, role } = useAuth();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showResults, setShowResults] = useState(false);
+
+  const { data: searchResults, isLoading: searchLoading } = useStudents({
+    search: searchQuery,
+  });
 
   const formatCurrency = (amount: number) => {
     if (amount >= 1000000) {
@@ -17,6 +27,18 @@ export default function Dashboard() {
       return `₨${(amount / 1000).toFixed(0)}K`;
     }
     return `₨${amount.toFixed(0)}`;
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    setShowResults(value.length >= 2);
+  };
+
+  const handleStudentClick = (studentId: string) => {
+    setShowResults(false);
+    setSearchQuery("");
+    navigate(`/students?id=${studentId}`);
   };
 
   return (
@@ -36,6 +58,93 @@ export default function Dashboard() {
           })}
         </div>
       </div>
+
+      {/* Global Search */}
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search students by ID, name, or phone number..."
+            value={searchQuery}
+            onChange={handleSearch}
+            onFocus={() => searchQuery.length >= 2 && setShowResults(true)}
+            className="w-full bg-secondary/50 border border-border rounded-xl pl-12 pr-4 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all placeholder:text-muted-foreground"
+          />
+          {searchLoading && (
+            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary animate-spin" />
+          )}
+          
+          {/* Search Results Dropdown */}
+          {showResults && searchQuery.length >= 2 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-50 max-h-80 overflow-auto">
+              {searchResults && searchResults.length > 0 ? (
+                <>
+                  <div className="p-2 border-b border-border">
+                    <p className="text-sm text-muted-foreground px-2">
+                      Found {searchResults.length} student(s)
+                    </p>
+                  </div>
+                  {searchResults.slice(0, 10).map((student) => (
+                    <button
+                      key={student.id}
+                      onClick={() => handleStudentClick(student.id)}
+                      className="w-full flex items-center gap-4 p-3 hover:bg-secondary/50 transition-colors text-left"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-medium text-primary">
+                          {student.first_name[0]}{student.last_name[0]}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">
+                          {student.first_name} {student.last_name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {student.student_id} • {student.class} • {student.guardian_phone}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        student.status === "active" 
+                          ? "bg-success/20 text-success" 
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {student.status}
+                      </span>
+                    </button>
+                  ))}
+                  {searchResults.length > 10 && (
+                    <div className="p-3 border-t border-border">
+                      <Button 
+                        variant="ghost" 
+                        className="w-full"
+                        onClick={() => {
+                          setShowResults(false);
+                          navigate(`/students?search=${encodeURIComponent(searchQuery)}`);
+                        }}
+                      >
+                        View all {searchResults.length} results
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="p-6 text-center text-muted-foreground">
+                  No students found matching "{searchQuery}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Click outside to close */}
+      {showResults && (
+        <div 
+          className="fixed inset-0 z-40" 
+          onClick={() => setShowResults(false)}
+        />
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center h-48">
