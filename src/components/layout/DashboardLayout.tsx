@@ -1,8 +1,11 @@
 import { ReactNode, useState } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Bell, Search, User, LogOut } from "lucide-react";
+import { Bell, Search, User, LogOut, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSessionTimer } from "@/hooks/useSessionTimer";
+import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -18,6 +22,20 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, role, signOut, isMasterAdmin } = useAuth();
+  const { formattedTime, isWarning } = useSessionTimer();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
+
+  const getRoleLabel = () => {
+    if (isMasterAdmin) return "Master Admin";
+    if (role === "staff") return "Staff";
+    return "User";
+  };
 
   return (
     <SidebarProvider>
@@ -44,6 +62,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Session Timer */}
+              <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                isWarning ? "bg-warning/20 text-warning" : "bg-secondary/50 text-muted-foreground"
+              }`}>
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-mono">{formattedTime}</span>
+              </div>
+
               {/* Notifications */}
               <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
                 <Bell className="h-5 w-5" />
@@ -57,17 +83,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
                       <User className="h-4 w-4 text-primary" />
                     </div>
-                    <span className="hidden sm:inline font-medium">Admin</span>
+                    <div className="hidden sm:flex flex-col items-start">
+                      <span className="font-medium text-sm">{user?.email?.split("@")[0] || "User"}</span>
+                      <Badge variant="outline" className="text-xs px-1.5 py-0">
+                        {getRoleLabel()}
+                      </Badge>
+                    </div>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Master Admin</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    <div>
+                      <p className="font-medium">{user?.email}</p>
+                      <p className="text-xs text-muted-foreground">{getRoleLabel()}</p>
+                    </div>
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-                  <DropdownMenuItem>Audit Logs</DropdownMenuItem>
-                  <DropdownMenuItem>System Backup</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/")}>Dashboard</DropdownMenuItem>
+                  {isMasterAdmin && (
+                    <>
+                      <DropdownMenuItem onClick={() => navigate("/staff")}>Staff Management</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/audit")}>Audit Logs</DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive">
+                  <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
                   </DropdownMenuItem>
