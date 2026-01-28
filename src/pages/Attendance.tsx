@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useStudentsByClass, Student } from "@/hooks/useStudents";
 import { useAttendanceByDate, useSaveAttendance } from "@/hooks/useAttendance";
+import { useClasses } from "@/hooks/useClasses";
 
 interface StudentAttendanceState {
   id: string;
@@ -19,11 +20,8 @@ interface StudentAttendanceState {
   name: string;
   rollNo: number;
   status: "present" | "absent" | "leave" | null;
+  photoUrl?: string | null;
 }
-
-const CLASS_OPTIONS = [
-  "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"
-];
 
 export default function Attendance() {
   const [selectedClass, setSelectedClass] = useState<string>("");
@@ -32,6 +30,7 @@ export default function Attendance() {
   );
   const [attendanceState, setAttendanceState] = useState<StudentAttendanceState[]>([]);
 
+  const { data: classes } = useClasses();
   const { data: students, isLoading: studentsLoading } = useStudentsByClass(selectedClass);
   const { data: existingAttendance, isLoading: attendanceLoading } = useAttendanceByDate(
     selectedClass,
@@ -51,6 +50,7 @@ export default function Attendance() {
           name: `${student.first_name} ${student.last_name}`,
           rollNo: index + 1,
           status: existing?.status as "present" | "absent" | "leave" | null || null,
+          photoUrl: student.photo_url,
         };
       });
       setAttendanceState(newState);
@@ -122,9 +122,9 @@ export default function Attendance() {
                 <SelectValue placeholder="Choose a class" />
               </SelectTrigger>
               <SelectContent>
-                {CLASS_OPTIONS.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    Class {c}
+                {classes?.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -220,7 +220,7 @@ export default function Attendance() {
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
-                <h3 className="font-semibold">Class {selectedClass}</h3>
+                <h3 className="font-semibold">{selectedClass}</h3>
                 <p className="text-sm text-muted-foreground">
                   {selectedDate} • {attendanceState.length} students
                 </p>
@@ -253,11 +253,19 @@ export default function Attendance() {
                     )}
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="font-bold text-primary">
-                          {student.rollNo}
-                        </span>
-                      </div>
+                      {student.photoUrl ? (
+                        <img 
+                          src={student.photoUrl} 
+                          alt={student.name}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="font-bold text-primary">
+                            {student.rollNo}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{student.name}</p>
                         <p className="text-xs text-muted-foreground font-mono">
@@ -311,7 +319,7 @@ export default function Attendance() {
             <Users className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Students Found</h3>
             <p className="text-muted-foreground">
-              No active students found in Class {selectedClass}. Add students first.
+              No active students found in {selectedClass}. Add students first.
             </p>
           </div>
         )

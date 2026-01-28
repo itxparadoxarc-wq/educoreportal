@@ -94,6 +94,36 @@ export type Database = {
         }
         Relationships: []
       }
+      classes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
       exam_marks: {
         Row: {
           created_at: string
@@ -315,6 +345,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      student_documents: {
+        Row: {
+          created_at: string
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          student_id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          student_id: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          student_id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_documents_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       students: {
         Row: {

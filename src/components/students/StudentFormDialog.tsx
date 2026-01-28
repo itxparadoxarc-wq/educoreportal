@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,8 +21,13 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateStudent, useUpdateStudent, Student } from "@/hooks/useStudents";
+import { useClasses } from "@/hooks/useClasses";
+import { supabase } from "@/integrations/supabase/client";
+import { Upload, Camera, Loader2, X, FileText, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const studentSchema = z.object({
+  student_id: z.string().min(1, "Student ID is required").max(50),
   first_name: z.string().min(1, "First name is required").max(50),
   last_name: z.string().min(1, "Last name is required").max(50),
   class: z.string().min(1, "Class is required"),
@@ -46,10 +51,28 @@ interface StudentFormDialogProps {
   student?: Student | null;
 }
 
+interface DocumentFile {
+  id?: string;
+  name: string;
+  type: string;
+  file?: File;
+  path?: string;
+}
+
 export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDialogProps) {
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
+  const { data: classes } = useClasses();
+  const { toast } = useToast();
   const isEditing = !!student;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [documents, setDocuments] = useState<DocumentFile[]>([]);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   const {
     register,
@@ -68,6 +91,7 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
   useEffect(() => {
     if (student) {
       reset({
+        student_id: student.student_id,
         first_name: student.first_name,
         last_name: student.last_name,
         class: student.class,
@@ -82,31 +106,154 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
         notes: student.notes || undefined,
         status: student.status as "active" | "inactive" | "alumni" | "left",
       });
+      // Load existing photo
+      if (student.photo_url) {
+        setPhotoPreview(student.photo_url);
+      }
+      // Load existing documents
+      loadDocuments(student.id);
     } else {
       reset({
         status: "active",
+        student_id: generateStudentId(),
         first_name: "",
         last_name: "",
         class: "",
         guardian_name: "",
         guardian_phone: "",
       });
+      setPhotoPreview(null);
+      setDocuments([]);
     }
-  }, [student, reset]);
+  }, [student, reset, open]);
+
+  const generateStudentId = () => {
+    const year = new Date().getFullYear();
+    const random = Math.floor(Math.random() * 9000) + 1000;
+    return `STU-${year}-${random}`;
+  };
+
+  const loadDocuments = async (studentId: string) => {
+    const { data, error } = await supabase
+      .from("student_documents")
+      .select("*")
+      .eq("student_id", studentId);
+    
+    if (!error && data) {
+      setDocuments(data.map(doc => ({
+        id: doc.id,
+        name: doc.file_name,
+        type: doc.document_type,
+        path: doc.file_path,
+      })));
+    }
+  };
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "Error", description: "Photo must be less than 5MB", variant: "destructive" });
+        return;
+      }
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onload = () => setPhotoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDocumentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newDocs: DocumentFile[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 10 * 1024 * 1024) {
+          toast({ title: "Error", description: `${file.name} is too large (max 10MB)`, variant: "destructive" });
+          continue;
+        }
+        newDocs.push({ name: file.name, type: "Document", file });
+      }
+      setDocuments([...documents, ...newDocs]);
+    }
+    if (docInputRef.current) docInputRef.current.value = "";
+  };
+
+  const removeDocument = (index: number) => {
+    setDocuments(documents.filter((_, i) => i !== index));
+  };
+
+  const uploadPhoto = async (studentId: string): Promise<string | null> => {
+    if (!photoFile) return student?.photo_url || null;
+
+    const ext = photoFile.name.split(".").pop();
+    const path = `photos/${studentId}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("student-files")
+      .upload(path, photoFile, { upsert: true });
+
+    if (error) {
+      console.error("Photo upload error:", error);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("student-files").getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const uploadDocuments = async (studentId: string) => {
+    for (const doc of documents) {
+      if (doc.file) {
+        const ext = doc.file.name.split(".").pop();
+        const path = `documents/${studentId}/${Date.now()}-${doc.name}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("student-files")
+          .upload(path, doc.file);
+
+        if (uploadError) {
+          console.error("Document upload error:", uploadError);
+          continue;
+        }
+
+        await supabase.from("student_documents").insert({
+          student_id: studentId,
+          document_type: doc.type,
+          file_name: doc.name,
+          file_path: path,
+          file_size: doc.file.size,
+        });
+      }
+    }
+  };
 
   const onSubmit = async (data: StudentFormData) => {
     try {
+      let resultId = student?.id;
+
       if (isEditing && student) {
-        await updateStudent.mutateAsync({ id: student.id, data });
+        // Upload photo first
+        const photoUrl = await uploadPhoto(student.id);
+        
+        await updateStudent.mutateAsync({ 
+          id: student.id, 
+          data: { ...data, photo_url: photoUrl } 
+        });
+        
+        // Upload new documents
+        await uploadDocuments(student.id);
       } else {
-        // Generate a placeholder student_id - the trigger will replace it
-        await createStudent.mutateAsync({
+        // Create student first - ensure required fields are present
+        const result = await createStudent.mutateAsync({
+          student_id: data.student_id,
           first_name: data.first_name,
           last_name: data.last_name,
           class: data.class,
-          section: data.section,
           guardian_name: data.guardian_name,
           guardian_phone: data.guardian_phone,
+          section: data.section,
           guardian_relation: data.guardian_relation,
           date_of_birth: data.date_of_birth,
           gender: data.gender,
@@ -114,11 +261,29 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
           address: data.address,
           notes: data.notes,
           status: data.status,
-          student_id: "TEMP-" + Date.now(),
         });
+        
+        resultId = result.id;
+        
+        // Upload photo
+        if (photoFile && resultId) {
+          const photoUrl = await uploadPhoto(resultId);
+          if (photoUrl) {
+            await supabase.from("students").update({ photo_url: photoUrl }).eq("id", resultId);
+          }
+        }
+        
+        // Upload documents
+        if (resultId) {
+          await uploadDocuments(resultId);
+        }
       }
+      
       onOpenChange(false);
       reset();
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      setDocuments([]);
     } catch (error) {
       // Error is handled by the mutation
     }
@@ -130,7 +295,7 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Student" : "Add New Student"}</DialogTitle>
           <DialogDescription>
@@ -141,6 +306,63 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Photo Upload */}
+          <div className="flex items-start gap-6">
+            <div className="flex-shrink-0">
+              <div 
+                className="relative h-32 w-32 rounded-xl border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer overflow-hidden bg-secondary/30"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {photoPreview ? (
+                  <>
+                    <img src={photoPreview} alt="Student" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPhotoFile(null);
+                        setPhotoPreview(null);
+                      }}
+                      className="absolute top-1 right-1 p-1 bg-background/80 rounded-full hover:bg-background"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <Camera className="h-8 w-8 mb-2" />
+                    <span className="text-xs">Add Photo</span>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelect}
+                className="hidden"
+              />
+            </div>
+
+            {/* Student ID */}
+            <div className="flex-1 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="student_id">Student ID *</Label>
+                <Input
+                  id="student_id"
+                  {...register("student_id")}
+                  placeholder="e.g., STU-2025-0001"
+                />
+                {errors.student_id && (
+                  <p className="text-sm text-destructive">{errors.student_id.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Unique identifier for this student. Can be edited.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Personal Information */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
@@ -179,9 +401,9 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
                   <SelectContent>
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
-                      <SelectItem key={c} value={c}>
-                        Class {c}
+                    {classes?.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -265,6 +487,63 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
             </div>
           </div>
 
+          {/* Documents */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+              Documents
+            </h3>
+            <div className="space-y-3">
+              <div
+                className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => docInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Click to upload documents (Results, Certificates, etc.)
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  PDF, Images up to 10MB each
+                </p>
+              </div>
+              <input
+                ref={docInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                onChange={handleDocumentSelect}
+                className="hidden"
+              />
+
+              {documents.length > 0 && (
+                <div className="space-y-2">
+                  {documents.map((doc, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-secondary/30 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium">{doc.name}</p>
+                          <p className="text-xs text-muted-foreground">{doc.type}</p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => removeDocument(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Additional Information */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
@@ -311,7 +590,16 @@ export function StudentFormDialog({ open, onOpenChange, student }: StudentFormDi
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : isEditing ? "Update Student" : "Add Student"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : isEditing ? (
+                "Update Student"
+              ) : (
+                "Add Student"
+              )}
             </Button>
           </div>
         </form>

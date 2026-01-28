@@ -39,6 +39,7 @@ import {
 import { useStudents, useDeleteStudent, Student } from "@/hooks/useStudents";
 import { StudentFormDialog } from "@/components/students/StudentFormDialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useClasses } from "@/hooks/useClasses";
 
 const statusColors: Record<string, string> = {
   active: "status-badge bg-success/20 text-success",
@@ -56,6 +57,7 @@ export default function Students() {
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
 
   const { isMasterAdmin } = useAuth();
+  const { data: classes } = useClasses();
   const { data: students, isLoading, error } = useStudents({
     class: classFilter,
     status: statusFilter,
@@ -137,14 +139,14 @@ export default function Students() {
           {/* Filters */}
           <div className="flex gap-3 flex-wrap">
             <Select value={classFilter} onValueChange={setClassFilter}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-40">
                 <SelectValue placeholder="Class" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
-                  <SelectItem key={c} value={c}>
-                    Class {c}
+                {classes?.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -234,12 +236,20 @@ export default function Students() {
                     </td>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
-                          <span className="text-sm font-medium text-primary">
-                            {student.first_name[0]}
-                            {student.last_name[0]}
-                          </span>
-                        </div>
+                        {student.photo_url ? (
+                          <img 
+                            src={student.photo_url} 
+                            alt={`${student.first_name} ${student.last_name}`}
+                            className="h-9 w-9 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center">
+                            <span className="text-sm font-medium text-primary">
+                              {student.first_name[0]}
+                              {student.last_name[0]}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <span className="font-medium">
                             {student.first_name} {student.last_name}
