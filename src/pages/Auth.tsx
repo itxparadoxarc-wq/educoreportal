@@ -28,18 +28,19 @@ export default function Auth() {
   useEffect(() => {
     const checkFirstTimeSetup = async () => {
       try {
-        // Check if any user_roles exist (indicating there are admin users)
-        const { count, error } = await supabase
-          .from("user_roles")
-          .select("*", { count: "exact", head: true });
-        
+        // IMPORTANT: We cannot rely on querying user_roles directly here because
+        // Row Level Security will hide rows from unauthenticated users.
+        // Use a SECURITY DEFINER backend function that returns only a boolean.
+        const { data, error } = await supabase.rpc("is_system_initialized" as any);
+
         if (error) {
           console.error("Error checking setup status:", error);
           setIsFirstTimeSetup(false);
           return;
         }
-        
-        setIsFirstTimeSetup(count === 0);
+
+        const isInitialized = Boolean(data);
+        setIsFirstTimeSetup(!isInitialized);
       } catch (err) {
         console.error("Error checking setup status:", err);
         setIsFirstTimeSetup(false);

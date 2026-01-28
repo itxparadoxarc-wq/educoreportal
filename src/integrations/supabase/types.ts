@@ -496,6 +496,7 @@ export type Database = {
       is_authenticated_staff_or_admin: { Args: never; Returns: boolean }
       is_master_admin: { Args: never; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      is_system_initialized: { Args: never; Returns: boolean }
       setup_first_admin: { Args: { admin_user_id: string }; Returns: boolean }
     }
     Enums: {
