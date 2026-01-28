@@ -21,6 +21,7 @@ export default function Auth() {
   const [info, setInfo] = useState("");
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState<boolean | null>(null);
   const [setupComplete, setSetupComplete] = useState(false);
+  const [showResendSection, setShowResendSection] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -176,6 +177,7 @@ export default function Auth() {
       if (error) {
         if (getEmailNotConfirmed(error.message)) {
           setError("Your email is not verified yet. Please verify your email, or resend the verification email below.");
+          setShowResendSection(true);
           return;
         }
         if (error.message.includes("Invalid login credentials")) {
@@ -199,7 +201,7 @@ export default function Auth() {
     );
   }
 
-  const showResendVerification = getEmailNotConfirmed(error);
+  const showResendVerification = showResendSection || getEmailNotConfirmed(error);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -463,11 +465,22 @@ export default function Auth() {
                 </Button>
               </form>
 
-              <div className="mt-6 pt-6 border-t border-border">
+              <div className="mt-6 pt-6 border-t border-border space-y-4">
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                   <Shield className="h-4 w-4" />
                   <span>Protected by session timeout (30 min)</span>
                 </div>
+                
+                {/* Always-visible toggle for resend verification */}
+                {!showResendSection && (
+                  <button
+                    type="button"
+                    onClick={() => setShowResendSection(true)}
+                    className="w-full text-sm text-primary hover:underline"
+                  >
+                    Need to resend email verification?
+                  </button>
+                )}
               </div>
             </div>
           )}
