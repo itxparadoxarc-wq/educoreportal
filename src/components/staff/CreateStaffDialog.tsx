@@ -61,48 +61,32 @@ export function CreateStaffDialog({ open, onOpenChange, onSuccess }: CreateStaff
     setIsLoading(true);
 
     try {
-      // Note: In a production app, you'd use an Edge Function to create users
-      // as admin. For now, we'll use signUp and then assign the role.
-      
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: formData.fullName,
-          },
+      // Call the edge function to create staff without logging out the current user
+      const { data, error: fnError } = await supabase.functions.invoke("create-staff", {
+        body: {
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.fullName,
+          role: formData.role,
         },
       });
 
-      if (authError) {
-        if (authError.message.includes("already registered")) {
-          setError("An account with this email already exists.");
-        } else {
-          setError(authError.message);
-        }
+      if (fnError) {
+        console.error("Edge function error:", fnError);
+        setError(fnError.message || "Failed to create staff account");
         setIsLoading(false);
         return;
       }
 
-      if (authData.user) {
-        // Create profile
-        await supabase.from("profiles").insert({
-          user_id: authData.user.id,
-          full_name: formData.fullName,
-          email: formData.email,
-        });
-
-        // Assign role
-        await supabase.from("user_roles").insert({
-          user_id: authData.user.id,
-          role: formData.role,
-        });
+      if (data?.error) {
+        setError(data.error);
+        setIsLoading(false);
+        return;
       }
 
       toast({
         title: "Staff Account Created",
-        description: `${formData.fullName} has been added as ${formData.role === "master_admin" ? "Master Admin" : "Staff"}.`,
+        description: `${formData.fullName} has been added as ${formData.role === "master_admin" ? "Master Admin" : "Staff"}. They can now log in with their credentials.`,
       });
 
       // Reset form
@@ -133,7 +117,7 @@ export function CreateStaffDialog({ open, onOpenChange, onSuccess }: CreateStaff
         <DialogHeader>
           <DialogTitle>Create Staff Account</DialogTitle>
           <DialogDescription>
-            Create a new account for a staff member or administrator
+            Create a new account for a staff member or administrator. They will be able to log in immediately.
           </DialogDescription>
         </DialogHeader>
 

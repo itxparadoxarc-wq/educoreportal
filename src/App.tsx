@@ -9,6 +9,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
+import StudentProfile from "./pages/StudentProfile";
 import Fees from "./pages/Fees";
 import Attendance from "./pages/Attendance";
 import Academics from "./pages/Academics";
@@ -50,6 +51,16 @@ const App = () => (
                 <ProtectedRoute>
                   <DashboardLayout>
                     <Students />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/students/:id"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <StudentProfile />
                   </DashboardLayout>
                 </ProtectedRoute>
               }
