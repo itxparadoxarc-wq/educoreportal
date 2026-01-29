@@ -20,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateExam } from "@/hooks/useAcademics";
+import { useClasses } from "@/hooks/useClasses";
+import { Loader2 } from "lucide-react";
 
 const examSchema = z.object({
   name: z.string().min(1, "Exam name is required"),
@@ -38,6 +40,7 @@ interface CreateExamDialogProps {
 
 export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) {
   const createExam = useCreateExam();
+  const { data: classes, isLoading: classesLoading } = useClasses();
   const [selectedClass, setSelectedClass] = useState<string>("");
 
   const {
@@ -101,14 +104,22 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
                   setSelectedClass(v);
                   setValue("class", v);
                 }}
+                disabled={classesLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select class" />
+                  {classesLoading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Loading...</span>
+                    </div>
+                  ) : (
+                    <SelectValue placeholder="Select class" />
+                  )}
                 </SelectTrigger>
                 <SelectContent>
-                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"].map((c) => (
-                    <SelectItem key={c} value={c}>
-                      Class {c}
+                  {classes?.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

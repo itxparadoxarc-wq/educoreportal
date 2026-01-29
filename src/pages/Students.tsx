@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Plus,
-  Filter,
   Download,
   MoreHorizontal,
   Eye,
@@ -10,6 +10,7 @@ import {
   Phone,
   Trash2,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function Students() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -68,6 +70,10 @@ export default function Students() {
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
     setIsFormOpen(true);
+  };
+
+  const handleViewProfile = (student: Student) => {
+    navigate(`/students/${student.id}`);
   };
 
   const handleDelete = async () => {
@@ -228,7 +234,11 @@ export default function Students() {
               </thead>
               <tbody>
                 {students.map((student) => (
-                  <tr key={student.id} className="cursor-pointer">
+                  <tr 
+                    key={student.id} 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleViewProfile(student)}
+                  >
                     <td>
                       <span className="font-mono text-sm text-primary">
                         {student.student_id}
@@ -280,7 +290,7 @@ export default function Students() {
                         {student.status}
                       </span>
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -288,6 +298,10 @@ export default function Students() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="gap-2" onClick={() => handleViewProfile(student)}>
+                            <Eye className="h-4 w-4" />
+                            View Profile & Report
+                          </DropdownMenuItem>
                           <DropdownMenuItem className="gap-2" onClick={() => handleEdit(student)}>
                             <Edit className="h-4 w-4" />
                             Edit Details

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { useSaveExamMarks, useExams } from "@/hooks/useAcademics";
 import { useStudents } from "@/hooks/useStudents";
+import { Loader2 } from "lucide-react";
 
 const marksSchema = z.object({
   exam_id: z.string().min(1, "Exam is required"),
@@ -52,16 +53,19 @@ const SUBJECTS = [
 
 export function EnterMarksDialog({ open, onOpenChange }: EnterMarksDialogProps) {
   const saveMarks = useSaveExamMarks();
-  const { data: exams } = useExams();
+  const { data: exams, isLoading: examsLoading } = useExams();
   const [selectedExam, setSelectedExam] = useState<string>("");
   const [selectedStudent, setSelectedStudent] = useState<string>("");
   const [selectedSubject, setSelectedSubject] = useState<string>("");
 
   const selectedExamData = exams?.find((e) => e.id === selectedExam);
-  const { data: students } = useStudents({
-    class: selectedExamData?.class,
-    status: "active",
-  });
+  
+  // Filter students by the exam's class
+  const { data: students, isLoading: studentsLoading } = useStudents(
+    selectedExamData
+      ? { class: selectedExamData.class, status: "active" }
+      : undefined
+  );
 
   const {
     register,
@@ -99,8 +103,16 @@ export function EnterMarksDialog({ open, onOpenChange }: EnterMarksDialogProps) 
     }
   };
 
+  const handleClose = () => {
+    onOpenChange(false);
+    reset();
+    setSelectedExam("");
+    setSelectedStudent("");
+    setSelectedSubject("");
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Enter Exam Marks</DialogTitle>
@@ -116,17 +128,32 @@ export function EnterMarksDialog({ open, onOpenChange }: EnterMarksDialogProps) 
                 setSelectedExam(v);
                 setValue("exam_id", v);
                 setSelectedStudent("");
+                setValue("student_id", "");
               }}
+              disabled={examsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Choose exam" />
+                {examsLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading exams...</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Choose exam" />
+                )}
               </SelectTrigger>
               <SelectContent>
-                {exams?.map((exam) => (
-                  <SelectItem key={exam.id} value={exam.id}>
-                    {exam.name} - Class {exam.class}
-                  </SelectItem>
-                ))}
+                {exams && exams.length > 0 ? (
+                  exams.map((exam) => (
+                    <SelectItem key={exam.id} value={exam.id}>
+                      {exam.name} - Class {exam.class}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No exams found. Create an exam first.
+                  </div>
+                )}
               </SelectContent>
             </Select>
             {errors.exam_id && (
@@ -142,21 +169,39 @@ export function EnterMarksDialog({ open, onOpenChange }: EnterMarksDialogProps) 
                 setSelectedStudent(v);
                 setValue("student_id", v);
               }}
-              disabled={!selectedExam}
+              disabled={!selectedExam || studentsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder={selectedExam ? "Choose student" : "Select exam first"} />
+                {studentsLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Loading students...</span>
+                  </div>
+                ) : (
+                  <SelectValue placeholder={selectedExam ? "Choose student" : "Select exam first"} />
+                )}
               </SelectTrigger>
               <SelectContent>
-                {students?.map((student) => (
-                  <SelectItem key={student.id} value={student.id}>
-                    {student.first_name} {student.last_name} ({student.student_id})
-                  </SelectItem>
-                ))}
+                {students && students.length > 0 ? (
+                  students.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.first_name} {student.last_name} ({student.student_id})
+                    </SelectItem>
+                  ))
+                ) : selectedExam ? (
+                  <div className="p-2 text-sm text-muted-foreground">
+                    No students found in class {selectedExamData?.class}
+                  </div>
+                ) : null}
               </SelectContent>
             </Select>
             {errors.student_id && (
               <p className="text-sm text-destructive">{errors.student_id.message}</p>
+            )}
+            {selectedExam && students && students.length === 0 && (
+              <p className="text-sm text-warning">
+                No active students found in class {selectedExamData?.class}. Please add students to this class first.
+              </p>
             )}
           </div>
 
@@ -212,11 +257,18 @@ export function EnterMarksDialog({ open, onOpenChange }: EnterMarksDialogProps) 
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save Marks"}
+            <Button type="submit" disabled={isSubmitting || !selectedExam || !selectedStudent}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : (
+                "Save Marks"
+              )}
             </Button>
           </div>
         </form>
